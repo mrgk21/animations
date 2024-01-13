@@ -38,8 +38,8 @@ impl Default for AnimationConfig {
 }
 
 pub trait Renderable {
-    fn calc_point_location(&self, point: &Point) -> Point;
-    fn render(&self, init_location: &Vec<Point>) -> Vec<Point>;
+    fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point;
+    fn render(&self, init_location: &Vec<Point>, optional: Option<Vec<f32>>) -> Vec<Point>;
     fn print_field(&self, points: &Vec<Point>);
 }
 
@@ -69,7 +69,7 @@ impl Parabola {
         }
         let mut par = Parabola {
             constant: 1.0,
-            x_offset: 25.0,
+            x_offset: 75.0,
             y_offset: 50.0,
             config: AnimationConfig::default(),
         };
@@ -100,16 +100,21 @@ impl Parabola {
         let time_offset = self.get_time_offset();
         let nspf = f32::floor(time_offset * 1_000_000_000 as f32)  as u32;
 
+        let mut reverse: f32 = -1.0;
+
         loop {
             if duration_tracker > self.config.total_time as f32 && self.config.total_time != -1{
                 break;
             }
 
-            // println!("{duration_tracker} {}", time_offset);
+            let last_elem = field_locations.last().unwrap().x_pos;
+            if last_elem > 0.95 * 2.0 * self.y_offset || last_elem < 0.05 * 2.0 * self.y_offset {
+                reverse = reverse * -1.0;
+            }
 
             self.print_field(&field_locations);
             sleep(Duration::new(0, nspf));
-            field_locations = self.render(&field_locations);
+            field_locations = self.render(&field_locations, Some(vec![reverse]));
             duration_tracker += time_offset;
         }
     }
@@ -117,11 +122,17 @@ impl Parabola {
 
 impl Renderable for Parabola {
     // calculate the next position of the point (direction: 1 is l-t-r and 0 is r-t-l)
-    fn calc_point_location(&self, point: &Point) -> Point {
-        let mut direction = point.direction;
+    fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point {
+        let mut direction: i8 = point.direction;
+        let mut reverse: f32 = -1.0;
+
+        if let Some(x) = optional {
+            reverse = *x.get(0).unwrap();
+        } 
+
         let mut x = f32::from(point.x_index);
         
-        if x >= 100.0 {
+        if x >= self.x_offset {
             direction = -1;
         }
         
@@ -139,18 +150,20 @@ impl Renderable for Parabola {
         let res = ((point.x_index/self.x_offset)).powi(2);  
         let res = self.constant - res;
         let res = f32::sqrt(res); 
-        let res = (1.0-res) * self.y_offset;
+        let res = (1.0-(direction as f32 * res * reverse)) * self.y_offset;
         return Point {x_index: x, x_pos: res, direction};
     }
 
     // create the position vectors from calculations
-    fn render(&self, init_location: &Vec<Point>) -> Vec<Point> {
+    fn render(&self, init_location: &Vec<Point>, optional: Option<Vec<f32>>) -> Vec<Point> {
         let mut result_vec: Vec<Point> = vec![];
 
-        for item in init_location.iter() {
-            let point = self.calc_point_location(item);
+        let reverse = optional.unwrap().get(0).unwrap().clone();
 
-            println!("{:?}", point);
+        for item in init_location.iter() {
+            let point = self.calc_point_location(item, Some(vec![reverse]));
+
+            // println!("{:?}", point);
             result_vec.push(point);
         }
 
@@ -160,7 +173,7 @@ impl Renderable for Parabola {
     // print out the position vectors
     fn print_field(&self, points: &Vec<Point>) {
         let width = self.config.terminal_width;
-        let scaling_factor: f32 = width as f32 / (-2.0 * self.x_offset);
+        let scaling_factor: f32 = width as f32 / (2.0 * self.x_offset);
         let mut buff: Vec<char> = vec![' '; width];
 
         // println!("{scaling_factor}");
@@ -180,8 +193,7 @@ impl Renderable for Parabola {
 
         let buff_str: String = buff.iter().collect();
 
-        println!("{}", buff_str);
+        print!("{}\r", buff_str);
         // print!("\r");
-        // stdout().flush().unwrap();
     }
 }
