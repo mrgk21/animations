@@ -8,7 +8,7 @@ fn main() {
         Err(_) => panic!("invalid parabola config"),
     };
 
-    parabola.config_animation(1000, 2, 100,100);
+    parabola.config_animation(25, 5, 100,100);
 
     parabola.start_animation();
 

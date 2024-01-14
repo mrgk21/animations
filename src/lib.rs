@@ -81,7 +81,7 @@ impl Parabola {
         let mut par = Parabola {
             constant: 1.0,
             x_offset: 75.0,
-            y_offset: 50.0,
+            y_offset: 200.0,
             config: AnimationConfig::default(),
         };
         return Ok(par);
@@ -101,7 +101,7 @@ impl Parabola {
     }
 
     fn get_point_offset(&self) -> f32 {
-        (self.config.terminal_width as f32) / ((self.config.cps + self.config.points as u32) as f32)
+        (self.config.terminal_width as f32) / (self.config.cps as f32)
     }
 
     pub fn start_animation(&self) {
@@ -113,7 +113,7 @@ impl Parabola {
 
         let mut reverse: f32 = -1.0;
 
-        let overshoot_factor = 0.0000005 * 2.0 * self.y_offset;
+        let overshoot_factor = 0.00001 * 2.0 * self.y_offset;
 
         loop {
             if duration_tracker > self.config.total_time as f32 && self.config.total_time != -1{
@@ -125,7 +125,7 @@ impl Parabola {
                 reverse = reverse * -1.0;
             }
 
-            println!("reverse: {reverse}", );
+            // println!("reverse: {reverse}", );
             field_locations = self.render(&field_locations, Some(vec![reverse]));
             self.print_field(&field_locations);
             sleep(Duration::new(0, nspf));
@@ -139,7 +139,7 @@ impl Renderable for Parabola {
     fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point {
 
         let mut direction = point.direction;
-        let mut reverse = if let Some(x) = optional {
+        let reverse = if let Some(x) = optional {
             *x.get(0).unwrap()
         } else {
             1.0
@@ -156,6 +156,14 @@ impl Renderable for Parabola {
         }
 
         x += direction as f32 * self.get_point_offset();
+
+        x = if x > self.x_offset {
+            self.x_offset
+        } else if x < 0.0 {
+            0.0
+        } else {
+            x
+        };
         
         // parabola will be used later on
         // let res = (point.x_index + self.x_offset).powi(2);
@@ -172,16 +180,18 @@ impl Renderable for Parabola {
 
     // create the position vectors from calculations
     fn render(&self, init_location: &Vec<Point>, optional: Option<Vec<f32>>) -> Vec<Point> {
-        let mut result_vec: Vec<Point> = vec![];
-
         let reverse = optional.unwrap().get(0).unwrap().clone();
 
-        for item in init_location.iter() {
-            let point = self.calc_point_location(item, Some(vec![reverse]));
+        let last_point = self.calc_point_location(init_location.last().unwrap(), Some(vec![reverse]));
 
-            // println!("{:?}", point);
-            result_vec.push(point);
-        }
+        // println!("{:?}", init_location);
+        // println!("{:?}", first_point);
+        // println!("{:?}", &last_point);
+        // println!("{reverse}");
+
+        let mut result_vec: Vec<Point> = init_location[1..].to_vec();
+        result_vec.push(last_point);
+        // println!("{:?}", result_vec);
 
         return result_vec;
     }
@@ -189,17 +199,19 @@ impl Renderable for Parabola {
     // print out the position vectors
     fn print_field(&self, points: &Vec<Point>) {
         let width = self.config.terminal_width;
-        let scaling_factor: f32 = width as f32 / (2.0 * self.x_offset);
+        let scaling_factor: f32 = width as f32 / (2.0 * self.y_offset);
         let mut buff: Vec<char> = vec![' '; width];
 
         for item in points.iter() {
             let norm_ind = item.x_pos.floor() * scaling_factor;
             let norm_ind = f32::floor(norm_ind) as usize;
+            // println!("normInd: {norm_ind} {width}");
             let norm_ind = if norm_ind >= width {
                 99
             } else {
                 norm_ind
             };
+
 
             buff[norm_ind] = '*';
 
