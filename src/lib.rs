@@ -5,7 +5,7 @@ use std::io::{Write, stdout};
 pub struct Point {
     pub x_index: f32,
     pub x_pos: f32,
-    direction: i8, // 1 or -1
+    direction: f32, // 1 or -1
 }
 
 impl Clone for Point {
@@ -33,6 +33,17 @@ impl Default for AnimationConfig {
             cps: 10,
             points: 4,
             terminal_width: 100
+        }
+    }
+}
+
+impl Clone for AnimationConfig {
+    fn clone(&self) -> Self {
+        AnimationConfig {
+            cps: self.cps,
+            points: self.points,
+            total_time: self.total_time,
+            terminal_width: self.terminal_width,
         }
     }
 }
@@ -76,12 +87,12 @@ impl Parabola {
         return Ok(par);
     }
 
-    pub fn config_animation(&mut self, cps: u32, points: u8, total_time: i32, width: usize) {
+    pub fn config_animation(&mut self, cps: u32, points: u8, total_time: i32, terminal_width: usize) {
         self.config = AnimationConfig {
             cps,
             points,
             total_time,
-            terminal_width: width,
+            terminal_width,
         };
     }
 
@@ -95,12 +106,14 @@ impl Parabola {
 
     pub fn start_animation(&self) {
         let mut duration_tracker: f32 = 0.0;
-        let mut field_locations = vec![Point{x_index: 0.0, x_pos: 0.0, direction: 1}; self.config.points as usize];
+        let mut field_locations = vec![Point{x_index: 0.0, x_pos: 0.0, direction: 1.0}; self.config.points as usize];
 
         let time_offset = self.get_time_offset();
         let nspf = f32::floor(time_offset * 1_000_000_000 as f32)  as u32;
 
         let mut reverse: f32 = -1.0;
+
+        let overshoot_factor = 0.0000005 * 2.0 * self.y_offset;
 
         loop {
             if duration_tracker > self.config.total_time as f32 && self.config.total_time != -1{
@@ -108,13 +121,14 @@ impl Parabola {
             }
 
             let last_elem = field_locations.last().unwrap().x_pos;
-            if last_elem > 0.95 * 2.0 * self.y_offset || last_elem < 0.05 * 2.0 * self.y_offset {
+            if last_elem >= (2.0 * self.y_offset) - overshoot_factor  || last_elem <= 0.0 + overshoot_factor {
                 reverse = reverse * -1.0;
             }
 
+            println!("reverse: {reverse}", );
+            field_locations = self.render(&field_locations, Some(vec![reverse]));
             self.print_field(&field_locations);
             sleep(Duration::new(0, nspf));
-            field_locations = self.render(&field_locations, Some(vec![reverse]));
             duration_tracker += time_offset;
         }
     }
@@ -123,21 +137,22 @@ impl Parabola {
 impl Renderable for Parabola {
     // calculate the next position of the point (direction: 1 is l-t-r and 0 is r-t-l)
     fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point {
-        let mut direction: i8 = point.direction;
-        let mut reverse: f32 = -1.0;
 
-        if let Some(x) = optional {
-            reverse = *x.get(0).unwrap();
-        } 
+        let mut direction = point.direction;
+        let mut reverse = if let Some(x) = optional {
+            *x.get(0).unwrap()
+        } else {
+            1.0
+        };
 
         let mut x = f32::from(point.x_index);
         
         if x >= self.x_offset {
-            direction = -1;
+            direction = -1.0;
         }
         
         if x <= 0.0 {
-            direction = 1;
+            direction = 1.0;
         }
 
         x += direction as f32 * self.get_point_offset();
@@ -147,10 +162,11 @@ impl Renderable for Parabola {
         // let res = res / (-4.0 * self.constant);
         // let res = res - self.y_offset;
 
-        let res = ((point.x_index/self.x_offset)).powi(2);  
+        let res = ((x/self.x_offset)).powi(2);
         let res = self.constant - res;
         let res = f32::sqrt(res); 
-        let res = (1.0-(direction as f32 * res * reverse)) * self.y_offset;
+        let res = (1.0-(direction * res * reverse)) * self.y_offset;
+        // println!("ip: {:?}, op: {:?}", point, Point {x_index: x, x_pos: res, direction});
         return Point {x_index: x, x_pos: res, direction};
     }
 
@@ -176,8 +192,6 @@ impl Renderable for Parabola {
         let scaling_factor: f32 = width as f32 / (2.0 * self.x_offset);
         let mut buff: Vec<char> = vec![' '; width];
 
-        // println!("{scaling_factor}");
-
         for item in points.iter() {
             let norm_ind = item.x_pos.floor() * scaling_factor;
             let norm_ind = f32::floor(norm_ind) as usize;
@@ -193,7 +207,7 @@ impl Renderable for Parabola {
 
         let buff_str: String = buff.iter().collect();
 
-        print!("{}\r", buff_str);
+        println!("{}", buff_str);
         // print!("\r");
     }
 }
