@@ -20,29 +20,20 @@ impl Clone for Point {
 
 pub struct AnimationConfig {
     points: u8,
-    cps: u32,
+    velocity: u32, // measured in renders per second
     total_time: i32,
-    terminal_width: usize
+    terminal_width: usize,
+    resolution: usize, // divisions per width
 }
 
 impl Default for AnimationConfig {
     fn default() -> Self {
         AnimationConfig {
-            cps: 50,
+            velocity: 50,
             total_time: -1,
             points: 2,
-            terminal_width: 100
-        }
-    }
-}
-
-impl Clone for AnimationConfig {
-    fn clone(&self) -> Self {
-        AnimationConfig {
-            cps: self.cps,
-            points: self.points,
-            total_time: self.total_time,
-            terminal_width: self.terminal_width,
+            terminal_width: 100,
+            resolution: 70,
         }
     }
 }
@@ -51,7 +42,8 @@ pub trait Renderable {
     fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point;
     fn render(&self, init_location: &Vec<Point>, optional: Option<Vec<f32>>) -> Vec<Point>;
     fn width(&mut self, terminal_width: usize) -> &mut Self;
-    fn cps(&mut self, cps: u32) -> &mut Self;
+    fn resolution(&mut self, resolution: usize) -> &mut Self;
+    fn velocity(&mut self, velocity: u32) -> &mut Self;
     fn points(&mut self, points: u8) -> &mut Self;
     fn total_time(&mut self, total_time: i32) -> &mut Self;
     fn config(&mut self, config: AnimationConfig) -> &mut Self;
@@ -103,8 +95,16 @@ impl Renderable for Ellipse {
         self
      }
 
-    fn cps(&mut self, cps: u32) -> &mut Self {
-        self.config.cps = cps;
+    fn velocity(&mut self, velocity: u32) -> &mut Self {
+        self.config.velocity = velocity;
+        self
+    }
+
+    fn resolution(&mut self, resolution: usize) -> &mut Self {
+        if resolution > self.config.terminal_width {
+            panic!("Resolution cannot be more than, terminal width: {}", self.config.terminal_width);
+        }
+        self.config.resolution = resolution;
         self
     }
 
@@ -124,11 +124,11 @@ impl Renderable for Ellipse {
     }
     
     fn get_time_offset(&self) -> f32 {
-        1.0 / ((self.config.cps) as f32)
+        1.0 / ((self.config.velocity) as f32)
     }
 
     fn get_point_offset(&self) -> f32 {
-        (self.config.terminal_width as f32) / (self.config.cps as f32)
+        ((self.config.terminal_width) as f32) / ((self.config.resolution) as f32)
     }
 
     // calculate the next position of the point (direction: 1 is l-t-r and 0 is r-t-l)
@@ -204,7 +204,7 @@ impl Field for Ellipse {
 
         let buff_str: String = buff.iter().collect();
         match stdout().flush()  {
-            Ok(_) => print!("{}\r", buff_str),
+            Ok(_) => println!("{}", buff_str),
             Err(_) => panic!("could not flush stdout error")
         };
     }
