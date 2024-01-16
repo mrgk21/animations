@@ -1,15 +1,14 @@
-use std::f32::consts::PI;
 
-use animations::{ Parabola, Renderable, Point };
+use animations::Ellipse;
 
 fn main() {
-    let mut parabola = match Parabola::new(200, None) {
+    let ellipse = match Ellipse::new(200, None) {
         Ok(x) => x,
-        Err(_) => panic!("invalid parabola config"),
+        Err(_) => panic!("invalid ellipse config"),
     };
 
-    parabola.config_animation(25, 5, 100,100);
+    // ellipse.config_animation(50, 5, -1,150);
 
-    parabola.start_animation();
+    ellipse.start_animation();
 
 }

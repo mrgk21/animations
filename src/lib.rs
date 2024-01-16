@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, thread::sleep, time::Duration};
+use std::{thread::sleep, time::Duration};
 use std::io::{Write, stdout};
 
 #[derive(Debug)]
@@ -29,9 +29,9 @@ struct AnimationConfig {
 impl Default for AnimationConfig {
     fn default() -> Self {
         AnimationConfig {
-            total_time: 100,
-            cps: 10,
-            points: 4,
+            cps: 50,
+            total_time: -1,
+            points: 5,
             terminal_width: 100
         }
     }
@@ -54,20 +54,20 @@ pub trait Renderable {
     fn print_field(&self, points: &Vec<Point>);
 }
 
-pub struct Parabola {
+pub struct Ellipse {
     x_offset: f32,
     y_offset: f32,
     constant: f32,
     config: AnimationConfig,
 }
 
-impl Parabola {
-    pub fn new(terminal_width: usize, shape_config: Option<Vec<f32>>) -> Result<Parabola, String> {
+impl Ellipse {
+    pub fn new(terminal_width: usize, shape_config: Option<Vec<f32>>) -> Result<Ellipse, String> {
         if let Some(params) = shape_config {
             if params.len() != 3 {
                 return Err(String::from("invalid params"));
             }
-            let mut par = Parabola {
+            return Ok(Ellipse {
                 x_offset: *params.get(0).unwrap(),
                 y_offset: *params.get(1).unwrap(),
                 constant: *params.get(2).unwrap(),
@@ -75,16 +75,14 @@ impl Parabola {
                     terminal_width,
                     ..AnimationConfig::default()
                 },
-            };
-            return Ok(par);
+            });
         }
-        let mut par = Parabola {
+        return Ok( Ellipse {
             constant: 1.0,
             x_offset: 75.0,
             y_offset: 200.0,
             config: AnimationConfig::default(),
-        };
-        return Ok(par);
+        });
     }
 
     pub fn config_animation(&mut self, cps: u32, points: u8, total_time: i32, terminal_width: usize) {
@@ -125,7 +123,6 @@ impl Parabola {
                 reverse = reverse * -1.0;
             }
 
-            // println!("reverse: {reverse}", );
             field_locations = self.render(&field_locations, Some(vec![reverse]));
             self.print_field(&field_locations);
             sleep(Duration::new(0, nspf));
@@ -134,7 +131,7 @@ impl Parabola {
     }
 }
 
-impl Renderable for Parabola {
+impl Renderable for Ellipse {
     // calculate the next position of the point (direction: 1 is l-t-r and 0 is r-t-l)
     fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point {
 
@@ -164,17 +161,11 @@ impl Renderable for Parabola {
         } else {
             x
         };
-        
-        // parabola will be used later on
-        // let res = (point.x_index + self.x_offset).powi(2);
-        // let res = res / (-4.0 * self.constant);
-        // let res = res - self.y_offset;
 
         let res = ((x/self.x_offset)).powi(2);
         let res = self.constant - res;
         let res = f32::sqrt(res); 
         let res = (1.0-(direction * res * reverse)) * self.y_offset;
-        // println!("ip: {:?}, op: {:?}", point, Point {x_index: x, x_pos: res, direction});
         return Point {x_index: x, x_pos: res, direction};
     }
 
@@ -183,15 +174,8 @@ impl Renderable for Parabola {
         let reverse = optional.unwrap().get(0).unwrap().clone();
 
         let last_point = self.calc_point_location(init_location.last().unwrap(), Some(vec![reverse]));
-
-        // println!("{:?}", init_location);
-        // println!("{:?}", first_point);
-        // println!("{:?}", &last_point);
-        // println!("{reverse}");
-
         let mut result_vec: Vec<Point> = init_location[1..].to_vec();
         result_vec.push(last_point);
-        // println!("{:?}", result_vec);
 
         return result_vec;
     }
@@ -205,24 +189,19 @@ impl Renderable for Parabola {
         for item in points.iter() {
             let norm_ind = item.x_pos.floor() * scaling_factor;
             let norm_ind = f32::floor(norm_ind) as usize;
-            // println!("normInd: {norm_ind} {width}");
             let norm_ind = if norm_ind >= width {
-                99
+                width-1
             } else {
                 norm_ind
             };
 
-
             buff[norm_ind] = '*';
-
         }
 
         let buff_str: String = buff.iter().collect();
-
         match stdout().flush()  {
-            Ok(_) => print!("{}\r", buff_str),
+            Ok(_) => println!("{}", buff_str),
             Err(_) => panic!("could not flush stdout error")
-        } 
-        // print!("\r");
+        };
     }
 }
