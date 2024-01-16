@@ -219,7 +219,10 @@ impl Renderable for Parabola {
 
         let buff_str: String = buff.iter().collect();
 
-        println!("{}", buff_str);
+        match stdout().flush()  {
+            Ok(_) => print!("{}\r", buff_str),
+            Err(_) => panic!("could not flush stdout error")
+        } 
         // print!("\r");
     }
 }
