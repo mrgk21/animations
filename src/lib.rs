@@ -18,8 +18,7 @@ impl Clone for Point {
     }
 }
 
-
-struct AnimationConfig {
+pub struct AnimationConfig {
     points: u8,
     cps: u32,
     total_time: i32,
@@ -31,7 +30,7 @@ impl Default for AnimationConfig {
         AnimationConfig {
             cps: 50,
             total_time: -1,
-            points: 5,
+            points: 2,
             terminal_width: 100
         }
     }
@@ -51,7 +50,23 @@ impl Clone for AnimationConfig {
 pub trait Renderable {
     fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point;
     fn render(&self, init_location: &Vec<Point>, optional: Option<Vec<f32>>) -> Vec<Point>;
-    fn print_field(&self, points: &Vec<Point>);
+    fn width(&mut self, terminal_width: usize) -> &mut Self;
+    fn cps(&mut self, cps: u32) -> &mut Self;
+    fn points(&mut self, points: u8) -> &mut Self;
+    fn total_time(&mut self, total_time: i32) -> &mut Self;
+    fn config(&mut self, config: AnimationConfig) -> &mut Self;
+    fn get_time_offset(&self) -> f32;
+    fn get_point_offset(&self) -> f32;
+}
+
+pub trait Shape {
+    fn new() -> Self;
+    fn params(&mut self, params: Vec<f32>) -> &mut Self;
+}
+
+pub trait Field {
+    fn print(&self, points: &Vec<Point>);
+    fn start_animation(&self);
 }
 
 pub struct Ellipse {
@@ -61,39 +76,53 @@ pub struct Ellipse {
     config: AnimationConfig,
 }
 
-impl Ellipse {
-    pub fn new(terminal_width: usize, shape_config: Option<Vec<f32>>) -> Result<Ellipse, String> {
-        if let Some(params) = shape_config {
-            if params.len() != 3 {
-                return Err(String::from("invalid params"));
-            }
-            return Ok(Ellipse {
-                x_offset: *params.get(0).unwrap(),
-                y_offset: *params.get(1).unwrap(),
-                constant: *params.get(2).unwrap(),
-                config: AnimationConfig{
-                    terminal_width,
-                    ..AnimationConfig::default()
-                },
-            });
-        }
-        return Ok( Ellipse {
+
+impl Shape for Ellipse {
+    fn new() -> Self {
+        Ellipse {
             constant: 1.0,
             x_offset: 75.0,
             y_offset: 200.0,
             config: AnimationConfig::default(),
-        });
+        }
     }
 
-    pub fn config_animation(&mut self, cps: u32, points: u8, total_time: i32, terminal_width: usize) {
-        self.config = AnimationConfig {
-            cps,
-            points,
-            total_time,
-            terminal_width,
-        };
+    fn params(&mut self, params: Vec<f32>) -> &mut Self {
+        self.x_offset = *params.get(0).unwrap();
+        self.y_offset = *params.get(1).unwrap();
+        self.constant = *params.get(2).unwrap();
+        self
     }
 
+}
+
+impl Renderable for Ellipse {
+
+    fn width(&mut self, terminal_width: usize) -> &mut Self {
+        self.config.terminal_width = terminal_width;
+        self
+     }
+
+    fn cps(&mut self, cps: u32) -> &mut Self {
+        self.config.cps = cps;
+        self
+    }
+
+    fn points(&mut self, points: u8) -> &mut Self {
+        self.config.points = points;
+        self
+    }
+
+    fn total_time(&mut self, total_time: i32) -> &mut Self {
+        self.config.total_time = total_time;
+        self
+    }
+
+    fn config(&mut self, config: AnimationConfig) -> &mut Self {
+        self.config = config;
+        self
+    }
+    
     fn get_time_offset(&self) -> f32 {
         1.0 / ((self.config.cps) as f32)
     }
@@ -102,36 +131,6 @@ impl Ellipse {
         (self.config.terminal_width as f32) / (self.config.cps as f32)
     }
 
-    pub fn start_animation(&self) {
-        let mut duration_tracker: f32 = 0.0;
-        let mut field_locations = vec![Point{x_index: 0.0, x_pos: 0.0, direction: 1.0}; self.config.points as usize];
-
-        let time_offset = self.get_time_offset();
-        let nspf = f32::floor(time_offset * 1_000_000_000 as f32)  as u32;
-
-        let mut reverse: f32 = -1.0;
-
-        let overshoot_factor = 0.00001 * 2.0 * self.y_offset;
-
-        loop {
-            if duration_tracker > self.config.total_time as f32 && self.config.total_time != -1{
-                break;
-            }
-
-            let last_elem = field_locations.last().unwrap().x_pos;
-            if last_elem >= (2.0 * self.y_offset) - overshoot_factor  || last_elem <= 0.0 + overshoot_factor {
-                reverse = reverse * -1.0;
-            }
-
-            field_locations = self.render(&field_locations, Some(vec![reverse]));
-            self.print_field(&field_locations);
-            sleep(Duration::new(0, nspf));
-            duration_tracker += time_offset;
-        }
-    }
-}
-
-impl Renderable for Ellipse {
     // calculate the next position of the point (direction: 1 is l-t-r and 0 is r-t-l)
     fn calc_point_location(&self, point: &Point, optional: Option<Vec<f32>>) -> Point {
 
@@ -180,8 +179,13 @@ impl Renderable for Ellipse {
         return result_vec;
     }
 
-    // print out the position vectors
-    fn print_field(&self, points: &Vec<Point>) {
+}
+
+
+impl Field for Ellipse {
+
+      // print out the position vectors
+    fn print(&self, points: &Vec<Point>) {
         let width = self.config.terminal_width;
         let scaling_factor: f32 = width as f32 / (2.0 * self.y_offset);
         let mut buff: Vec<char> = vec![' '; width];
@@ -200,8 +204,36 @@ impl Renderable for Ellipse {
 
         let buff_str: String = buff.iter().collect();
         match stdout().flush()  {
-            Ok(_) => println!("{}", buff_str),
+            Ok(_) => print!("{}\r", buff_str),
             Err(_) => panic!("could not flush stdout error")
         };
+    }
+
+    fn start_animation(&self) {
+        let mut duration_tracker: f32 = 0.0;
+        let mut field_locations = vec![Point{x_index: 0.0, x_pos: 0.0, direction: 1.0}; self.config.points as usize];
+
+        let time_offset = self.get_time_offset();
+        let nspf = f32::floor(time_offset * 1_000_000_000 as f32)  as u32;
+
+        let mut reverse: f32 = -1.0;
+
+        let overshoot_factor = 0.00001 * 2.0 * self.y_offset;
+
+        loop {
+            if duration_tracker > self.config.total_time as f32 && self.config.total_time != -1{
+                break;
+            }
+
+            let last_elem = field_locations.last().unwrap().x_pos;
+            if last_elem >= (2.0 * self.y_offset) - overshoot_factor  || last_elem <= 0.0 + overshoot_factor {
+                reverse = reverse * -1.0;
+            }
+
+            field_locations = self.render(&field_locations, Some(vec![reverse]));
+            self.print(&field_locations);
+            sleep(Duration::new(0, nspf));
+            duration_tracker += time_offset;
+        }
     }
 }

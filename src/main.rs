@@ -1,13 +1,11 @@
 
-use animations::Ellipse;
+use animations::{Ellipse, Shape, Field, Renderable};
 
 fn main() {
-    let ellipse = match Ellipse::new(200, None) {
-        Ok(x) => x,
-        Err(_) => panic!("invalid ellipse config"),
-    };
-
-    // ellipse.config_animation(50, 5, -1,150);
+    let mut ellipse = Ellipse::new();
+    ellipse
+        .cps(50)
+        .points(5);
 
     ellipse.start_animation();
 
