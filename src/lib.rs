@@ -124,7 +124,7 @@ impl Renderable for Ellipse {
     }
     
     fn get_time_offset(&self) -> f32 {
-        1.0 / ((self.config.velocity) as f32)
+        ((self.config.terminal_width) as f32) / ((self.config.velocity) as f32 * (self.config.resolution) as f32)
     }
 
     fn get_point_offset(&self) -> f32 {
@@ -204,7 +204,7 @@ impl Field for Ellipse {
 
         let buff_str: String = buff.iter().collect();
         match stdout().flush()  {
-            Ok(_) => println!("{}", buff_str),
+            Ok(_) => print!("{}\r", buff_str),
             Err(_) => panic!("could not flush stdout error")
         };
     }
